@@ -20,7 +20,7 @@
     "clean": "rm -rf dist",
     "lint": "eslint '**/*.{js,jsx,ts,tsx}'",
     "prepare": "yarn pkg"
-  },
+},
   "size-limit": [
     {
       "path": "dist/umd/index.js",
