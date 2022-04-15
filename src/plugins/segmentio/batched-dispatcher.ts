@@ -74,7 +74,7 @@ export default function batch(apiHost: string, config?: BatchingConfig) {
 
     return fetch(remote, {
       headers: {
-        'Content-Type': 'text/plain',
+        'Content-Type': 'application/json',
       },
       method: 'post',
       body: JSON.stringify({ batch, writeKey }),
