@@ -1,4 +1,3 @@
-import type { Integrations } from '../../core/events/interfaces'
 import { LegacySettings } from '../../browser'
 import { JSONValue } from '../../core/events'
 import { Plugin } from '../../core/plugin'
@@ -44,7 +43,6 @@ function validate(pluginLike: unknown): pluginLike is Plugin[] {
 
 export async function remoteLoader(
   settings: LegacySettings,
-  integrations: Integrations,
   obfuscate?: boolean
 ): Promise<Plugin[]> {
   const allPlugins: Plugin[] = []
@@ -52,11 +50,6 @@ export async function remoteLoader(
 
   const pluginPromises = (settings.remotePlugins ?? []).map(
     async (remotePlugin) => {
-      if (
-        (integrations.All === false && !integrations[remotePlugin.name]) ||
-        integrations[remotePlugin.name] === false
-      )
-        return
       try {
         if (obfuscate) {
           const urlSplit = remotePlugin.url.split('/')

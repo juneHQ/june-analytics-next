@@ -70,7 +70,7 @@ export function segmentio(
       return ctx
     }
 
-    const path = ctx.event.type.charAt(0)
+    const path = ctx.event.type //.charAt(0)
     let json = toFacade(ctx.event).json()
 
     if (ctx.event.type === 'track') {
