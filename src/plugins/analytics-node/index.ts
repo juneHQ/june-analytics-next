@@ -11,8 +11,6 @@ interface AnalyticsNodeSettings {
   version: string
 }
 
-const btoa = (val: string): string => Buffer.from(val).toString('base64')
-
 export async function post(
   event: SegmentEvent,
   writeKey: string
@@ -22,7 +20,7 @@ export async function post(
     headers: {
       'Content-Type': 'application/json',
       'User-Agent': 'analytics-node-next/latest',
-      Authorization: `Basic ${btoa(writeKey)}`,
+      Authorization: `Basic ${writeKey}`,
     },
     body: JSON.stringify(event),
   })
