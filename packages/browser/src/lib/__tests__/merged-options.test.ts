@@ -1,4 +1,4 @@
-import { mergedOptions } from '../merged-options'
+import { mergedOptions } from '../merged-options';
 
 describe(mergedOptions, () => {
   it('merges options', () => {
@@ -95,7 +95,7 @@ describe(mergedOptions, () => {
   it('works with boolean overrides', () => {
     const cdn = {
       integrations: {
-        'Segment.io': { apiHost: 'api.segment.io' },
+        'Segment.io': { apiHost: 'api.june.so' },
         'Google Tag Manager': {
           ghost: '👻',
         },

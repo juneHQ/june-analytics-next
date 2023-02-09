@@ -1,16 +1,16 @@
-import { Facade } from '@segment/facade'
-import { Analytics } from '../../core/analytics'
-import { LegacySettings } from '../../browser'
-import { isOffline } from '../../core/connection'
-import { Context } from '../../core/context'
-import { Plugin } from '../../core/plugin'
-import { PriorityQueue } from '../../lib/priority-queue'
-import { PersistedPriorityQueue } from '../../lib/priority-queue/persisted'
-import { toFacade } from '../../lib/to-facade'
-import batch from './batched-dispatcher'
-import standard from './fetch-dispatcher'
-import { normalize } from './normalize'
-import { scheduleFlush } from './schedule-flush'
+import { Facade } from '@segment/facade';
+import { scheduleFlush } from './schedule-flush';
+import { normalize } from './normalize';
+import standard from './fetch-dispatcher';
+import batch from './batched-dispatcher';
+import { toFacade } from '../../lib/to-facade';
+import { PersistedPriorityQueue } from '../../lib/priority-queue/persisted';
+import { PriorityQueue } from '../../lib/priority-queue';
+import { Plugin } from '../../core/plugin';
+import { Context } from '../../core/context';
+import { isOffline } from '../../core/connection';
+import { Analytics } from '../../core/analytics';
+import { LegacySettings } from '../../browser';
 
 export type SegmentioSettings = {
   apiKey: string
@@ -67,7 +67,7 @@ export function segmentio(
   const inflightEvents = new Set<Context>()
   const flushing = false
 
-  const apiHost = settings?.apiHost ?? 'api.segment.io/v1'
+  const apiHost = settings?.apiHost ?? 'api.june.so'
   const protocol = settings?.protocol ?? 'https'
   const remote = `${protocol}://${apiHost}`
 
