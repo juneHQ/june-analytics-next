@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/camelcase */
 import { tsubMiddleware } from '..'
 import { toFacade } from '../../../lib/to-facade'
 
@@ -25,7 +26,7 @@ describe('tsub middleware', () => {
       payload = transformed?.obj
     })
 
-    void middleware({
+    middleware({
       integration: 'Google Tag Manager',
       next,
       payload: toFacade({
@@ -44,7 +45,7 @@ describe('tsub middleware', () => {
       payload = transformed?.obj
     })
 
-    void middleware({
+    middleware({
       integration: 'Google Analytics',
       next,
       payload: toFacade({

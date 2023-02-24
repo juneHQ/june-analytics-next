@@ -1,31 +1,27 @@
-import jar from 'js-cookie'
-import { Analytics } from '../../core/analytics'
+import { CookieAttributes, get as getCookie, set as setCookie } from 'js-cookie'
+import { Analytics } from '../../analytics'
 import { LegacySettings } from '../../browser'
 import { SegmentEvent } from '../../core/events'
-import { gracefulDecodeURIComponent } from '../../core/query-string/gracefulDecodeURIComponent'
 import { tld } from '../../core/user/tld'
 import { SegmentFacade } from '../../lib/to-facade'
 import { SegmentioSettings } from './index'
 import { version } from '../../generated/version'
-import { getAvailableStorageOptions, UniversalStorage } from '../../core/user'
 
-let cookieOptions: jar.CookieAttributes | undefined
-function getCookieOptions(): jar.CookieAttributes {
-  if (cookieOptions) {
-    return cookieOptions
-  }
+let domain: string | undefined = undefined
+try {
+  domain = tld(new URL(window.location.href))
+} catch (_) {
+  domain = undefined
+}
 
-  const domain = tld(window.location.href)
-  cookieOptions = {
-    expires: 31536000000, // 1 year
-    secure: false,
-    path: '/',
-  }
-  if (domain) {
-    cookieOptions.domain = domain
-  }
+const cookieOptions: CookieAttributes = {
+  expires: 31536000000, // 1 year
+  secure: false,
+  path: '/',
+}
 
-  return cookieOptions
+if (domain) {
+  cookieOptions.domain = domain
 }
 
 // Default value will be updated to 'web' in `bundle-umd.ts` for web build.
@@ -39,10 +35,14 @@ export function getVersionType(): typeof _version {
   return _version
 }
 
+export function sCookie(key: string, value: string): string | undefined {
+  return setCookie(key, value, cookieOptions)
+}
+
 type Ad = { id: string; type: string }
 
 export function ampId(): string | undefined {
-  const ampId = jar.get('_ga')
+  const ampId = getCookie('_ga')
   if (ampId && ampId.startsWith('amp')) {
     return ampId
   }
@@ -61,7 +61,7 @@ export function utm(query: string): Record<string, string> {
       if (utmParam === 'campaign') {
         utmParam = 'name'
       }
-      acc[utmParam] = gracefulDecodeURIComponent(v)
+      acc[utmParam] = decodeURIComponent(v.replace(/\+/g, ' '))
     }
     return acc
   }, {} as Record<string, string>)
@@ -90,22 +90,12 @@ function ads(query: string): Ad | undefined {
   }
 }
 
-function referrerId(
-  query: string,
-  ctx: SegmentEvent['context'],
-  disablePersistance: boolean
-): void {
-  const storage = new UniversalStorage<{
-    's:context.referrer': Ad
-  }>(
-    disablePersistance ? [] : ['cookie'],
-    getAvailableStorageOptions(getCookieOptions())
-  )
+function referrerId(query: string, ctx: SegmentEvent['context']): void {
+  let stored = getCookie('s:context.referrer')
+  let ad = ads(query)
 
-  const stored = storage.get('s:context.referrer')
-  let ad: Ad | undefined | null = ads(query)
-
-  ad = ad ?? stored
+  stored = stored ? JSON.parse(stored) : undefined
+  ad = ad ?? (stored as Ad | undefined)
 
   if (!ad) {
     return
@@ -115,7 +105,7 @@ function referrerId(
     ctx.referrer = { ...ctx.referrer, ...ad }
   }
 
-  storage.set('s:context.referrer', ad)
+  setCookie('s:context.referrer', JSON.stringify(ad), cookieOptions)
 }
 
 export function normalize(
@@ -129,6 +119,7 @@ export function normalize(
 
   json.context = json.context ?? json.options ?? {}
   const ctx = json.context
+  const anonId = json.anonymousId
 
   delete json.options
   json.writeKey = settings?.apiKey
@@ -160,12 +151,12 @@ export function normalize(
     ctx.campaign = utm(query)
   }
 
-  referrerId(query, ctx, analytics.options.disableClientPersistence ?? false)
+  referrerId(query, ctx)
 
   json.userId = json.userId || user.id()
-  json.anonymousId = json.anonymousId || user.anonymousId()
-
+  json.anonymousId = user.anonymousId(anonId)
   json.sentAt = new Date()
+  json.timestamp = new Date()
 
   const failed = analytics.queue.failedInitializations || []
   if (failed.length > 0) {
@@ -177,7 +168,7 @@ export function normalize(
 
   for (const key in integrations) {
     const integration = integrations[key]
-    if (key === 'june.so') {
+    if (key === 'Segment.io') {
       bundled.push(key)
     }
     if (integration.bundlingStatus === 'bundled') {

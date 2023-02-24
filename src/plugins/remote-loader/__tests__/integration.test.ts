@@ -1,3 +1,4 @@
+import { mocked } from 'ts-jest/utils'
 import { JSDOM } from 'jsdom'
 import { AnalyticsBrowser, LegacySettings } from '../../../browser'
 
@@ -43,7 +44,6 @@ describe.skip('Remote Plugin Integration', () => {
         // but I'd like to have a full integration test if possible
         {
           name: 'amplitude',
-          creationName: 'amplitude',
           url: 'https://ajs-next-integrations.s3-us-west-2.amazonaws.com/fab-5/amplitude-plugins.js',
           libraryName: 'amplitude-pluginsDestination',
           settings: {
@@ -54,9 +54,11 @@ describe.skip('Remote Plugin Integration', () => {
     }
 
     // @ts-ignore mocking fetch is *hard*
-    jest.mocked(unfetch).mockImplementation(
+    // @ts-ignore
+    mocked(unfetch).mockImplementation(
+      // @ts-ignore
       (): Promise<Response> =>
-        // @ts-expect-error
+        // @ts-ignore
         Promise.resolve({
           json: () => Promise.resolve(cdnResponse),
         })

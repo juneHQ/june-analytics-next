@@ -8,9 +8,6 @@ export const snippet = (writeKey: string, load: boolean = true, extra = '') => `
     else {
       analytics.invoked = !0
       analytics.methods = [
-        'screen',
-        'register',
-        'deregister',
         'trackSubmit',
         'trackClick',
         'trackLink',

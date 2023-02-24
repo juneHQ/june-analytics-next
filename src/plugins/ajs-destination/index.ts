@@ -1,13 +1,18 @@
-import { Integrations, JSONObject } from '../../core/events'
+import {
+  Integrations,
+  JSONObject,
+  JSONValue,
+  SegmentEvent,
+} from '@/core/events'
 import { Alias, Facade, Group, Identify, Page, Track } from '@segment/facade'
-import { Analytics, InitOptions } from '../../core/analytics'
+import { Analytics, InitOptions } from '../../analytics'
 import { LegacySettings } from '../../browser'
 import { isOffline, isOnline } from '../../core/connection'
 import { Context, ContextCancelation } from '../../core/context'
 import { isServer } from '../../core/environment'
-import { DestinationPlugin, Plugin } from '../../core/plugin'
-import { attempt } from '@segment/analytics-core'
-import { isPlanEventEnabled } from '../../lib/is-plan-event-enabled'
+import { Plugin } from '../../core/plugin'
+import { attempt } from '../../core/queue/delivery'
+import { asPromise } from '../../lib/as-promise'
 import { mergedOptions } from '../../lib/merged-options'
 import { pWhile } from '../../lib/p-while'
 import { PriorityQueue } from '../../lib/priority-queue'
@@ -16,19 +21,12 @@ import {
   applyDestinationMiddleware,
   DestinationMiddlewareFunction,
 } from '../middleware'
-import {
-  buildIntegration,
-  loadIntegration,
-  resolveIntegrationNameFromSource,
-  resolveVersion,
-  unloadIntegration,
-} from './loader'
-import { LegacyIntegration, ClassicIntegrationSource } from './types'
-import { isPlainObject } from '@segment/analytics-core'
-import {
-  isDisabledIntegration as shouldSkipIntegration,
-  isInstallableIntegration,
-} from './utils'
+import { tsubMiddleware } from '../routing-middleware'
+import { loadIntegration, resolveVersion, unloadIntegration } from './loader'
+import { LegacyIntegration } from './types'
+
+const klona = (evt: SegmentEvent): SegmentEvent =>
+  JSON.parse(JSON.stringify(evt))
 
 export type ClassType<T> = new (...args: unknown[]) => T
 
@@ -63,10 +61,10 @@ async function flushQueue(
   return queue
 }
 
-export class LegacyDestination implements DestinationPlugin {
+export class LegacyDestination implements Plugin {
   name: string
   version: string
-  settings: JSONObject
+  settings: Record<string, JSONValue>
   options: InitOptions = {}
   type: Plugin['type'] = 'destination'
   middleware: DestinationMiddlewareFunction[] = []
@@ -75,9 +73,7 @@ export class LegacyDestination implements DestinationPlugin {
   private _initialized = false
   private onReady: Promise<unknown> | undefined
   private onInitialize: Promise<unknown> | undefined
-  private disableAutoISOConversion: boolean
 
-  integrationSource?: ClassicIntegrationSource
   integration: LegacyIntegration | undefined
 
   buffer: PriorityQueue<Context>
@@ -86,15 +82,12 @@ export class LegacyDestination implements DestinationPlugin {
   constructor(
     name: string,
     version: string,
-    settings: JSONObject = {},
-    options: InitOptions,
-    integrationSource?: ClassicIntegrationSource
+    settings: Record<string, JSONValue> = {},
+    options: InitOptions
   ) {
     this.name = name
     this.version = version
     this.settings = { ...settings }
-    this.disableAutoISOConversion = options.disableAutoISOConversion || false
-    this.integrationSource = integrationSource
 
     // AJS-Renderer sets an extraneous `type` setting that clobbers
     // existing type defaults. We need to remove it if it's present
@@ -103,9 +96,7 @@ export class LegacyDestination implements DestinationPlugin {
     }
 
     this.options = options
-    this.buffer = options.disableClientPersistence
-      ? new PriorityQueue(4, [])
-      : new PersistedPriorityQueue(4, `dest-${name}`)
+    this.buffer = new PersistedPriorityQueue(4, `dest-${name}`)
 
     this.scheduleFlush()
   }
@@ -123,19 +114,12 @@ export class LegacyDestination implements DestinationPlugin {
       return
     }
 
-    const integrationSource =
-      this.integrationSource ??
-      (await loadIntegration(
-        ctx,
-        this.name,
-        this.version,
-        this.options.obfuscate
-      ))
-
-    this.integration = buildIntegration(
-      integrationSource,
-      this.settings,
-      analyticsInstance
+    this.integration = await loadIntegration(
+      ctx,
+      analyticsInstance,
+      this.name,
+      this.version,
+      this.settings
     )
 
     this.onReady = new Promise((resolve) => {
@@ -174,7 +158,7 @@ export class LegacyDestination implements DestinationPlugin {
   }
 
   unload(_ctx: Context, _analyticsInstance: Analytics): Promise<void> {
-    return unloadIntegration(this.name, this.version, this.options.obfuscate)
+    return unloadIntegration(this.name, this.version)
   }
 
   addMiddleware(...fn: DestinationMiddlewareFunction[]): void {
@@ -203,14 +187,14 @@ export class LegacyDestination implements DestinationPlugin {
     const plan = this.options?.plan?.track
     const ev = ctx.event.event
 
-    if (plan && ev && this.name !== 'june.so') {
+    if (plan && ev && this.name !== 'Segment.io') {
       // events are always sent to segment (legacy behavior)
       const planEvent = plan[ev]
-      if (!isPlanEventEnabled(plan, planEvent)) {
+      if (planEvent?.enabled === false) {
         ctx.updateEvent('integrations', {
           ...ctx.event.integrations,
           All: false,
-          'june.so': true,
+          'Segment.io': true,
         })
         ctx.cancel(
           new ContextCancelation({
@@ -227,7 +211,7 @@ export class LegacyDestination implements DestinationPlugin {
         })
       }
 
-      if (planEvent?.enabled && planEvent?.integrations![this.name] === false) {
+      if (planEvent?.enabled && planEvent?.integrations[this.name] === false) {
         ctx.cancel(
           new ContextCancelation({
             retry: false,
@@ -241,7 +225,7 @@ export class LegacyDestination implements DestinationPlugin {
 
     const afterMiddleware = await applyDestinationMiddleware(
       this.name,
-      ctx.event,
+      klona(ctx.event),
       this.middleware
     )
 
@@ -249,9 +233,7 @@ export class LegacyDestination implements DestinationPlugin {
       return ctx
     }
 
-    const event = new clz(afterMiddleware, {
-      traverse: !this.disableAutoISOConversion,
-    })
+    const event = new clz(afterMiddleware, {})
 
     ctx.stats.increment('analytics_js.integration.invoke', 1, [
       `method:${eventType}`,
@@ -260,7 +242,9 @@ export class LegacyDestination implements DestinationPlugin {
 
     try {
       if (this.integration) {
-        await this.integration.invoke.call(this.integration, eventType, event)
+        await asPromise(
+          this.integration.invoke.call(this.integration, eventType, event)
+        )
       }
     } catch (err) {
       ctx.stats.increment('analytics_js.integration.invoke.error', 1, [
@@ -317,13 +301,11 @@ export class LegacyDestination implements DestinationPlugin {
   }
 }
 
-export function ajsDestinations(
+export async function ajsDestinations(
   settings: LegacySettings,
   globalIntegrations: Integrations = {},
-  options: InitOptions = {},
-  routingMiddleware?: DestinationMiddlewareFunction,
-  legacyIntegrationSources?: ClassicIntegrationSource[]
-): LegacyDestination[] {
+  options?: InitOptions
+): Promise<LegacyDestination[]> {
   if (isServer()) {
     return []
   }
@@ -334,56 +316,59 @@ export function ajsDestinations(
   }
 
   const routingRules = settings.middlewareSettings?.routingRules ?? []
-  const remoteIntegrationsConfig = settings.integrations
-  const localIntegrationsConfig = options.integrations
+  const routingMiddleware = tsubMiddleware(routingRules)
+
   // merged remote CDN settings with user provided options
   const integrationOptions = mergedOptions(settings, options ?? {}) as Record<
     string,
     JSONObject
   >
 
-  const adhocIntegrationSources = legacyIntegrationSources?.reduce(
-    (acc, integrationSource) => ({
-      ...acc,
-      [resolveIntegrationNameFromSource(integrationSource)]: integrationSource,
-    }),
-    {} as Record<string, ClassicIntegrationSource>
-  )
+  return Object.entries(settings.integrations)
+    .map(([name, integrationSettings]) => {
+      if (name.startsWith('Segment')) {
+        return
+      }
 
-  const installableIntegrations = new Set([
-    // Remotely configured installable integrations
-    ...Object.keys(remoteIntegrationsConfig).filter((name) =>
-      isInstallableIntegration(name, remoteIntegrationsConfig[name])
-    ),
+      const allDisableAndNotDefined =
+        globalIntegrations.All === false &&
+        globalIntegrations[name] === undefined
 
-    // Directly provided integration sources are only installable if settings for them are available
-    ...Object.keys(adhocIntegrationSources || {}).filter(
-      (name) =>
-        isPlainObject(remoteIntegrationsConfig[name]) ||
-        isPlainObject(localIntegrationsConfig?.[name])
-    ),
-  ])
+      if (globalIntegrations[name] === false || allDisableAndNotDefined) {
+        return
+      }
 
-  return Array.from(installableIntegrations)
-    .filter((name) => !shouldSkipIntegration(name, globalIntegrations))
-    .map((name) => {
-      const integrationSettings = remoteIntegrationsConfig[name]
+      const { type, bundlingStatus, versionSettings } = integrationSettings
+      // We use `!== 'unbundled'` (versus `=== 'bundled'`) to be inclusive of
+      // destinations without a defined value for `bundlingStatus`
+      const deviceMode =
+        bundlingStatus !== 'unbundled' &&
+        (type === 'browser' ||
+          versionSettings?.componentTypes?.includes('browser'))
+
+      // checking for iterable is a quick fix we need in place to prevent
+      // errors showing Iterable as a failed destiantion. Ideally, we should
+      // fix the Iterable metadata instead, but that's a longer process.
+      if ((!deviceMode && name !== 'Segment.io') || name === 'Iterable') {
+        return
+      }
+
       const version = resolveVersion(integrationSettings)
       const destination = new LegacyDestination(
         name,
         version,
         integrationOptions[name],
-        options,
-        adhocIntegrationSources?.[name]
+        options as object
       )
 
       const routing = routingRules.filter(
         (rule) => rule.destinationName === name
       )
-      if (routing.length > 0 && routingMiddleware) {
+      if (routing.length > 0) {
         destination.addMiddleware(routingMiddleware)
       }
 
       return destination
     })
+    .filter((xt) => xt !== undefined) as LegacyDestination[]
 }

@@ -1,17 +1,16 @@
-import { fetch } from '../../lib/fetch'
+import unfetch from 'unfetch'
+
+let fetch = unfetch
+if (typeof window !== 'undefined') {
+  // @ts-ignore
+  fetch = window.fetch || unfetch
+}
 
 export type Dispatcher = (url: string, body: object) => Promise<unknown>
 
-export type StandardDispatcherConfig = {
-  keepalive?: boolean
-}
-
-export default function (config?: StandardDispatcherConfig): {
-  dispatch: Dispatcher
-} {
+export default function (): { dispatch: Dispatcher } {
   function dispatch(url: string, body: object): Promise<unknown> {
     return fetch(url, {
-      keepalive: config?.keepalive,
       headers: { 'Content-Type': 'application/json' },
       method: 'post',
       body: JSON.stringify(body),

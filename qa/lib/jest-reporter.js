@@ -6,14 +6,7 @@ const btoa = (val) => Buffer.from(val).toString('base64')
 const getBranch = async () =>
   (await ex('git', ['branch', '--show-current'])).stdout
 
-const assertEnvVariable = (name) => {
-  if (process.env[name] !== undefined) return
-  throw new Error(`process.env.${name} is undefined`)
-}
-
 async function increment(metric, value = 0, tags = []) {
-  assertEnvVariable('STATS_WRITEKEY')
-
   const event = {
     event: metric,
     properties: {

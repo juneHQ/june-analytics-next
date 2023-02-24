@@ -1,13 +1,7 @@
 import { v4 as uuid } from '@lukeed/uuid'
 import { dset } from 'dset'
 import { ID, User } from '../user'
-import {
-  Options,
-  Integrations,
-  EventProperties,
-  Traits,
-  SegmentEvent,
-} from './interfaces'
+import { Options, Integrations, SegmentEvent } from './interfaces'
 import md5 from 'spark-md5'
 
 export * from './interfaces'
@@ -21,7 +15,7 @@ export class EventFactory {
 
   track(
     event: string,
-    properties?: EventProperties,
+    properties?: SegmentEvent['properties'],
     options?: Options,
     globalIntegrations?: Integrations
   ): SegmentEvent {
@@ -38,7 +32,7 @@ export class EventFactory {
   page(
     category: string | null,
     page: string | null,
-    properties?: EventProperties,
+    properties?: object,
     options?: Options,
     globalIntegrations?: Integrations
   ): SegmentEvent {
@@ -68,7 +62,7 @@ export class EventFactory {
   screen(
     category: string | null,
     screen: string | null,
-    properties?: EventProperties,
+    properties?: object,
     options?: Options,
     globalIntegrations?: Integrations
   ): SegmentEvent {
@@ -95,7 +89,7 @@ export class EventFactory {
 
   identify(
     userId: ID,
-    traits?: Traits,
+    traits?: SegmentEvent['traits'],
     options?: Options,
     globalIntegrations?: Integrations
   ): SegmentEvent {
@@ -111,7 +105,7 @@ export class EventFactory {
 
   group(
     groupId: ID,
-    traits?: Traits,
+    traits?: SegmentEvent['traits'],
     options?: Options,
     globalIntegrations?: Integrations
   ): SegmentEvent {
@@ -161,15 +155,11 @@ export class EventFactory {
       options: {},
     }
 
-    const user = this.user
-
-    if (user.id()) {
-      base.userId = user.id()
+    if (this.user.id()) {
+      base.userId = this.user.id()
     }
 
-    if (user.anonymousId()) {
-      base.anonymousId = user.anonymousId()
-    }
+    base.anonymousId = this.user.anonymousId()
 
     return base
   }
@@ -205,11 +195,6 @@ export class EventFactory {
   }
 
   public normalize(event: SegmentEvent): SegmentEvent {
-    // set anonymousId globally if we encounter an override
-    //segment.com/docs/connections/sources/catalog/libraries/website/javascript/identity/#override-the-anonymous-id-using-the-options-object
-    event.options?.anonymousId &&
-      this.user.anonymousId(event.options.anonymousId)
-
     const integrationBooleans = Object.keys(event.integrations ?? {}).reduce(
       (integrationNames, name) => {
         return {
@@ -236,7 +221,6 @@ export class EventFactory {
     const { options, ...rest } = event
 
     const body = {
-      timestamp: new Date(),
       ...rest,
       context,
       integrations: allIntegrations,

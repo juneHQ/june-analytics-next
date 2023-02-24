@@ -1,20 +1,14 @@
-import { Analytics } from '../../src/index'
+import { Analytics } from '../../src/analytics'
 import { Context } from '../../src/core/context'
 import { AnalyticsNode } from '../../src/node'
 import ex from 'execa'
 
-let analytics!: Analytics
-
+let analytics: Analytics = undefined
 
 const getBranch = async () =>
   (await ex('git', ['branch', '--show-current'])).stdout
 
 async function client(): Promise<Analytics> {
-
-  if (!process.env.STATS_WRITEKEY) {
-    throw new Error('no process.env.STATS_WRITEKEY')
-  }
-
   if (analytics) {
     return analytics
   }

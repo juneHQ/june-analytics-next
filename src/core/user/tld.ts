@@ -31,19 +31,8 @@ function levels(url: URL): string[] {
   return levels
 }
 
-function parseUrl(url: string): URL | undefined {
-  try {
-    return new URL(url)
-  } catch {
-    return
-  }
-}
-
-export function tld(url: string): string | undefined {
-  const parsedUrl = parseUrl(url)
-  if (!parsedUrl) return
-
-  const lvls = levels(parsedUrl)
+export function tld(url: URL): string | undefined {
+  const lvls = levels(url)
 
   // Lookup the real top level one.
   for (let i = 0; i < lvls.length; ++i) {
@@ -51,15 +40,10 @@ export function tld(url: string): string | undefined {
     const domain = lvls[i]
     const opts = { domain: '.' + domain }
 
-    try {
-      // cookie access throw an error if the library is ran inside a sandboxed environment (e.g. sandboxed iframe)
-      cookie.set(cname, '1', opts)
-      if (cookie.get(cname)) {
-        cookie.remove(cname, opts)
-        return domain
-      }
-    } catch (_) {
-      return
+    cookie.set(cname, '1', opts)
+    if (cookie.get(cname)) {
+      cookie.remove(cname, opts)
+      return domain
     }
   }
 }

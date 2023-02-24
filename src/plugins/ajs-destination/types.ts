@@ -1,10 +1,8 @@
 import { Group, Identify, Track, Page, Alias } from '@segment/facade'
-import { Analytics } from '../../core/analytics'
-import { Emitter } from '@segment/analytics-core'
-import { User } from '../../core/user'
+import { Analytics } from '../../analytics'
+import { Emitter } from '../../core/emitter'
 
 export interface LegacyIntegration extends Emitter {
-  name: string
   analytics?: Analytics
   initialize: () => void
   loaded: () => boolean
@@ -18,7 +16,7 @@ export interface LegacyIntegration extends Emitter {
   alias?: (event: Alias) => void | Promise<void>
   group?: (event: Group) => void | Promise<void>
 
-  // june.so specific
+  // Segment.io specific
   ontrack?: (event: Track) => void | Promise<void>
   onidentify?: (event: Identify) => void | Promise<void>
   onpage?: (event: Page) => void | Promise<void>
@@ -28,17 +26,3 @@ export interface LegacyIntegration extends Emitter {
   _assumesPageview?: boolean
   options?: object
 }
-
-export interface ClassicIntegrationBuilder {
-  new (options: object): LegacyIntegration
-  prototype: LegacyIntegration
-}
-
-export interface ClassicIntegrationGenerator {
-  (analytics: { user: () => User; addIntegration: () => void }): void
-  Integration: ClassicIntegrationBuilder
-}
-
-export type ClassicIntegrationSource =
-  | ClassicIntegrationGenerator
-  | ClassicIntegrationBuilder

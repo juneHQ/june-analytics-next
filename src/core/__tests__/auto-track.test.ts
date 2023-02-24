@@ -1,5 +1,5 @@
 import { JSDOM } from 'jsdom'
-import { Analytics } from '../analytics'
+import { Analytics } from '../../analytics'
 
 const sleep = (time: number): Promise<void> =>
   new Promise((resolve) => {
@@ -49,7 +49,6 @@ describe('track helpers', () => {
         runScripts: 'dangerously',
         resources: 'usable',
       })
-      // eslint-disable-next-line no-global-assign
       document = jsd.window.document
 
       jest.spyOn(console, 'error').mockImplementationOnce(() => {})
@@ -83,22 +82,6 @@ describe('track helpers', () => {
       mockTrack.mockImplementation(Analytics.prototype.track)
     })
 
-    it('should respect options object', async () => {
-      await analytics.trackLink(
-        link!,
-        'foo',
-        {},
-        { context: { ip: '0.0.0.0' } }
-      )
-      link.click()
-
-      expect(mockTrack).toHaveBeenCalledWith(
-        'foo',
-        {},
-        { context: { ip: '0.0.0.0' } }
-      )
-    })
-
     it('should stay on same page with blank href', async () => {
       link.href = ''
       await analytics.trackLink(link!, 'foo')
@@ -126,7 +109,7 @@ describe('track helpers', () => {
       expect(mockTrack).toHaveBeenCalled()
     })
 
-    it('should still navigate even if the track call fails', async () => {
+    it.only('should still navigate even if the track call fails', async () => {
       mockTrack.mockClear()
 
       let rejected = false
@@ -184,7 +167,7 @@ describe('track helpers', () => {
       await analytics.trackLink(link, 'event', { property: true })
       link.click()
 
-      expect(mockTrack).toBeCalledWith('event', { property: true }, {})
+      expect(mockTrack).toBeCalledWith('event', { property: true })
     })
 
     it('should accept an event function', async () => {
@@ -194,7 +177,7 @@ describe('track helpers', () => {
       await analytics.trackLink(link, event, { foo: 'bar' })
       link.click()
 
-      expect(mockTrack).toBeCalledWith('A', { foo: 'bar' }, {})
+      expect(mockTrack).toBeCalledWith('A', { foo: 'bar' })
     })
 
     it('should accept a properties function', async () => {
@@ -204,7 +187,7 @@ describe('track helpers', () => {
       await analytics.trackLink(link, 'event', properties)
       link.click()
 
-      expect(mockTrack).toBeCalledWith('event', { type: 'A' }, {})
+      expect(mockTrack).toBeCalledWith('event', { type: 'A' })
     })
 
     it('should load an href on click', async () => {
@@ -313,17 +296,6 @@ describe('track helpers', () => {
       expect(mockTrack).not.toBeCalled()
     })
 
-    it('should respect options object', async () => {
-      await analytics.trackForm(form, 'foo', {}, { context: { ip: '0.0.0.0' } })
-      submit.click()
-
-      expect(mockTrack).toHaveBeenCalledWith(
-        'foo',
-        {},
-        { context: { ip: '0.0.0.0' } }
-      )
-    })
-
     it('should trigger a track on a form submit', async () => {
       await analytics.trackForm(form, 'foo')
       submit.click()
@@ -350,7 +322,7 @@ describe('track helpers', () => {
     it('should send an event and properties', async () => {
       await analytics.trackForm(form, 'event', { property: true })
       submit.click()
-      expect(mockTrack).toBeCalledWith('event', { property: true }, {})
+      expect(mockTrack).toBeCalledWith('event', { property: true })
     })
 
     it('should accept an event function', async () => {
@@ -359,7 +331,7 @@ describe('track helpers', () => {
       }
       await analytics.trackForm(form, event, { foo: 'bar' })
       submit.click()
-      expect(mockTrack).toBeCalledWith('event', { foo: 'bar' }, {})
+      expect(mockTrack).toBeCalledWith('event', { foo: 'bar' })
     })
 
     it('should accept a properties function', async () => {
@@ -368,10 +340,10 @@ describe('track helpers', () => {
       }
       await analytics.trackForm(form, 'event', properties)
       submit.click()
-      expect(mockTrack).toBeCalledWith('event', { property: true }, {})
+      expect(mockTrack).toBeCalledWith('event', { property: true })
     })
 
-    it('should call submit after a timeout', async () => {
+    it('should call submit after a timeout', async (done) => {
       const submitSpy = jest.spyOn(form, 'submit')
       const mockedTrack = jest.fn()
 
@@ -383,35 +355,30 @@ describe('track helpers', () => {
 
       submit.click()
 
-      await sleep(500)
-
-      expect(submitSpy).toHaveBeenCalled()
+      setTimeout(function () {
+        expect(submitSpy).toHaveBeenCalled()
+        done()
+      }, 500)
     })
 
-    it('should trigger an existing submit handler', async () => {
-      const submitPromise = new Promise<void>((resolve) => {
-        form.addEventListener('submit', () => {
-          resolve()
-        })
+    it('should trigger an existing submit handler', async (done) => {
+      form.addEventListener('submit', () => {
+        done()
       })
 
       await analytics.trackForm(form, 'foo')
       submit.click()
-      await submitPromise
     })
 
-    it('should trigger an existing jquery submit handler', async () => {
+    it('should trigger an existing jquery submit handler', async (done) => {
       const $form = jQuery(form)
 
-      const submitPromise = new Promise<void>((resolve) => {
-        $form.submit(function () {
-          resolve()
-        })
+      $form.submit(function () {
+        done()
       })
 
       await analytics.trackForm(form, 'foo')
       submit.click()
-      await submitPromise
     })
 
     it('should track on a form submitted via jquery', async () => {
@@ -423,18 +390,15 @@ describe('track helpers', () => {
       expect(mockTrack).toBeCalled()
     })
 
-    it('should trigger an existing jquery submit handler on a form submitted via jquery', async () => {
+    it('should trigger an existing jquery submit handler on a form submitted via jquery', async (done) => {
       const $form = jQuery(form)
 
-      const submitPromise = new Promise<void>((resolve) => {
-        $form.submit(function () {
-          resolve()
-        })
+      $form.submit(function () {
+        done()
       })
 
       await analytics.trackForm(form, 'foo')
       $form.submit()
-      await submitPromise
     })
   })
 })

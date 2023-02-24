@@ -1,37 +1,22 @@
-import { Analytics } from '../../core/analytics'
+import { Analytics } from '../../analytics'
 import { LegacyIntegrationConfiguration } from '../../browser'
-import { getNextIntegrationsURL } from '../../lib/parse-cdn'
+import { getCDN } from '../../lib/parse-cdn'
 import { Context } from '../../core/context'
 import { User } from '../../core/user'
 import { loadScript, unloadScript } from '../../lib/load-script'
-import {
-  LegacyIntegration,
-  ClassicIntegrationBuilder,
-  ClassicIntegrationSource,
-} from './types'
+import { LegacyIntegration } from './types'
+
+const cdn = window.analytics?._cdn ?? getCDN()
+const path = cdn + '/next-integrations'
 
 function normalizeName(name: string): string {
   return name.toLowerCase().replace('.', '').replace(/\s+/g, '-')
 }
 
-function obfuscatePathName(pathName: string, obfuscate = false): string | void {
-  return obfuscate ? btoa(pathName).replace(/=/g, '') : undefined
-}
-
-export function resolveIntegrationNameFromSource(
-  integrationSource: ClassicIntegrationSource
-) {
-  return (
-    'Integration' in integrationSource
-      ? integrationSource.Integration
-      : integrationSource
-  ).prototype.name
-}
-
 function recordLoadMetrics(fullPath: string, ctx: Context, name: string): void {
   try {
     const [metric] =
-      window?.performance?.getEntriesByName(fullPath, 'resource') ?? []
+      global.window?.performance?.getEntriesByName(fullPath, 'resource') ?? []
     // we assume everything that took under 100ms is cached
     metric &&
       ctx.stats.gauge('legacy_destination_time', Math.round(metric.duration), [
@@ -43,43 +28,15 @@ function recordLoadMetrics(fullPath: string, ctx: Context, name: string): void {
   }
 }
 
-export function buildIntegration(
-  integrationSource: ClassicIntegrationSource,
-  integrationSettings: { [key: string]: any },
-  analyticsInstance: Analytics
-): LegacyIntegration {
-  let integrationCtr: ClassicIntegrationBuilder
-  // GA and Appcues use a different interface to instantiating integrations
-  if ('Integration' in integrationSource) {
-    const analyticsStub = {
-      user: (): User => analyticsInstance.user(),
-      addIntegration: (): void => {},
-    }
-
-    integrationSource(analyticsStub)
-    integrationCtr = integrationSource.Integration
-  } else {
-    integrationCtr = integrationSource
-  }
-
-  const integration = new integrationCtr(integrationSettings)
-  integration.analytics = analyticsInstance
-  return integration
-}
-
 export async function loadIntegration(
   ctx: Context,
+  analyticsInstance: Analytics,
   name: string,
   version: string,
-  obfuscate?: boolean
-): Promise<ClassicIntegrationSource> {
+  settings?: object
+): Promise<LegacyIntegration> {
   const pathName = normalizeName(name)
-  const obfuscatedPathName = obfuscatePathName(pathName, obfuscate)
-  const path = getNextIntegrationsURL()
-
-  const fullPath = `${path}/integrations/${
-    obfuscatedPathName ?? pathName
-  }/${version}/${obfuscatedPathName ?? pathName}.dynamic.js.gz`
+  const fullPath = `${path}/integrations/${pathName}/${version}/${pathName}.dynamic.js.gz`
 
   try {
     await loadScript(fullPath)
@@ -96,34 +53,43 @@ export async function loadIntegration(
   // @ts-ignore
   window[`${pathName}Loader`]()
 
-  return window[
-    // @ts-ignore
-    `${pathName}Integration`
-  ] as ClassicIntegrationSource
+  // @ts-ignore
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let integrationBuilder = window[`${pathName}Integration`] as any
+
+  // GA and Appcues use a different interface to instantiating integrations
+  if (integrationBuilder.Integration) {
+    const analyticsStub = {
+      user: (): User => analyticsInstance.user(),
+      addIntegration: (): void => {},
+    }
+
+    integrationBuilder(analyticsStub)
+    integrationBuilder = integrationBuilder.Integration
+  }
+
+  const integration = new integrationBuilder(settings) as LegacyIntegration
+  integration.analytics = analyticsInstance
+
+  return integration
 }
 
 export async function unloadIntegration(
   name: string,
-  version: string,
-  obfuscate?: boolean
+  version: string
 ): Promise<void> {
-  const path = getNextIntegrationsURL()
   const pathName = normalizeName(name)
-  const obfuscatedPathName = obfuscatePathName(name, obfuscate)
-
-  const fullPath = `${path}/integrations/${
-    obfuscatedPathName ?? pathName
-  }/${version}/${obfuscatedPathName ?? pathName}.dynamic.js.gz`
-
-  return unloadScript(fullPath)
+  return unloadScript(
+    `${path}/integrations/${pathName}/${version}/${pathName}.dynamic.js.gz`
+  )
 }
 
 export function resolveVersion(
-  settings?: LegacyIntegrationConfiguration
+  settings: LegacyIntegrationConfiguration
 ): string {
   return (
-    settings?.versionSettings?.override ??
-    settings?.versionSettings?.version ??
+    settings.versionSettings?.override ??
+    settings.versionSettings?.version ??
     'latest'
   )
 }

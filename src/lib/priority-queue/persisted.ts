@@ -81,7 +81,7 @@ function mutex(key: string, onUnlock: Function, attempt = 0): void {
       mutex(key, onUnlock, attempt + 1)
     }, lockTimeout)
   } else {
-    console.error('Unable to retrieve lock')
+    throw new Error('Unable to retrieve lock')
   }
 }
 
@@ -109,8 +109,7 @@ export class PersistedPriorityQueue extends PriorityQueue<Context> {
       }
     })
 
-    window.addEventListener('pagehide', () => {
-      // we deliberately want to use the less powerful 'pagehide' API to only persist on events where the analytics instance gets destroyed, and not on tab away.
+    window.addEventListener('beforeunload', () => {
       if (this.todo > 0) {
         const items = [...this.queue, ...this.future]
         try {
