@@ -18,6 +18,9 @@
     "!**/tester/**"
   ],
   "sideEffects": false,
+  "engines": {
+    "node": ">=12.22.0 <21.0.0"
+  },
   "scripts": {
     "build-prep": "sh scripts/build-prep.sh",
     "version": "yarn run build-prep && git add src/generated/version.ts",
@@ -33,7 +36,8 @@
     "cjs": "tsc -p tsconfig.build.json --outDir ./dist/cjs --module commonjs",
     "clean": "rm -rf dist",
     "lint": "yarn concurrently 'yarn:eslint .' 'yarn:tsc --noEmit'",
-    "test": "yarn jest"
+    "test": "yarn jest",
+    "postinstall": "node scripts/postinstall.js"
   },
   "size-limit": [
     {
@@ -95,6 +99,9 @@
     "webpack": "^5.36.1",
     "webpack-bundle-analyzer": "^4.4.2",
     "webpack-cli": "^4.8.0"
+  },
+  "optionalDependencies": {
+    "@stdlib/number-float64-base-normalize": "^0.0.9"
   },
   "packageManager": "yarn@3.2.1"
 }
